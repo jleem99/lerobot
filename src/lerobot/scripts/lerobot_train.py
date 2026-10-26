@@ -20,6 +20,7 @@ Requires: pip install 'lerobot[training]'  (includes dataset + accelerate + wand
 
 import dataclasses
 import logging
+import os
 import sys
 import time
 from collections.abc import Iterator
@@ -256,7 +257,7 @@ def train(cfg: TrainPipelineConfig, accelerator: "Accelerator | None" = None):
             mixed_precision = {torch.bfloat16: "bf16", torch.float16: "fp16"}[autocast_dtype]
         accelerator = Accelerator(
             step_scheduler_with_optimizer=False,
-            mixed_precision=mixed_precision,
+            mixed_precision=os.environ.get("ACCELERATE_MIXED_PRECISION", mixed_precision),
             kwargs_handlers=[ddp_kwargs],
             cpu=force_cpu,
         )

@@ -66,6 +66,7 @@ class SmolVLAConfig(PreTrainedConfig):
     use_cache: bool = True
 
     # Finetuning settings
+    dtype: str = "float32"  # Trainable transformer storage; independent of autocast.
     freeze_vision_encoder: bool = True
     train_expert_only: bool = True
     train_state_proj: bool = True
@@ -108,6 +109,9 @@ class SmolVLAConfig(PreTrainedConfig):
 
     def __post_init__(self):
         super().__post_init__()
+
+        if self.dtype not in ("float32", "bfloat16"):
+            raise ValueError(f"Invalid dtype: {self.dtype}")
 
         """Input validation (not exhaustive)."""
         if self.n_action_steps > self.chunk_size:

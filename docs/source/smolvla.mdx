@@ -31,6 +31,11 @@ SmolVLA is Hugging Face’s lightweight foundation model for robotics. Designed 
 SmolVLA is a base model, so fine-tuning on your own data is required for optimal performance in your setup.
 We recommend recording ~50 episodes of your task as a starting point. Follow our guide to get started: [Recording a Dataset](./il_robots)
 
+SmolVLA stores trainable transformers in fp32 by default and keeps a frozen VLM
+in bf16. This preserves small optimizer updates at the cost of additional memory.
+`policy.dtype` controls transformer storage; `ACCELERATE_MIXED_PRECISION` can
+select computation precision independently.
+
 <Tip>
 
 In your dataset, make sure to have enough demonstrations per each variation (e.g. the cube position on the table if it is cube pick-place task) you are introducing.

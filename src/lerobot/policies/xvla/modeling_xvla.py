@@ -502,6 +502,42 @@ class XVLAPolicy(PreTrainedPolicy):
             state_dict[embed_key] = state_dict[shared_key]
         elif embed_key in state_dict and shared_key not in state_dict:
             state_dict[shared_key] = state_dict[embed_key]
+        # Convert only a state-conditioned initialization, never an already narrowed checkpoint.
+        encoder = instance.model.transformer.action_encoder
+        encoder_key = "model.transformer.action_encoder.fc.weight"
+        if not config.use_proprio:
+            source = PreTrainedConfig.from_pretrained(
+                pretrained_name_or_path,
+                revision=revision,
+                cache_dir=cache_dir,
+                token=token,
+                local_files_only=local_files_only,
+            )
+            if source.use_proprio:
+                action_dim = instance.model.dim_action
+                time_dim = config.dim_time
+                source_width = action_dim + source.max_state_dim + time_dim
+                expected_shape = (config.num_domains, source_width * encoder.output_size)
+                if (
+                    source.dim_time != time_dim
+                    or source.max_state_dim != config.max_state_dim
+                    or time_dim < 1
+                    or tuple(state_dict[encoder_key].shape) != expected_shape
+                ):
+                    raise ValueError("Unsupported X-VLA proprioception projection conversion dimensions")
+                weights = state_dict[encoder_key].reshape(
+                    config.num_domains, source_width, encoder.output_size
+                )
+                state_dict[encoder_key] = torch.cat(
+                    [weights[:, :action_dim], weights[:, -time_dim:]], dim=1
+                ).reshape_as(encoder.fc.weight)
+                config.pretrained_proprio_conversion = {
+                    "source": model_id,
+                    "revision": revision,
+                    "source_input_dim": source_width,
+                    "target_input_dim": encoder.input_size,
+                    "removed_state_dim": source.max_state_dim,
+                }
         # step 4: load into instance
         instance.load_state_dict(state_dict, strict=True)
         logging.info("Loaded XVLA checkpoint")

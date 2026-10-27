@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from lerobot.configs import FeatureType, NormalizationMode, PolicyFeature, PreTrainedConfig
 from lerobot.optim import AdamWConfig, CosineDecayWithWarmupSchedulerConfig
-from lerobot.utils.constants import OBS_IMAGES
+from lerobot.utils.constants import OBS_IMAGES, OBS_STATE
 
 from ..rtc.configuration_rtc import RTCConfig
 
@@ -39,6 +39,7 @@ class SmolVLAConfig(PreTrainedConfig):
 
     # Shorter state and action vectors will be padded
     max_state_dim: int = 32
+    use_proprio: bool = True
     max_action_dim: int = 32
 
     # Image preprocessing
@@ -125,6 +126,8 @@ class SmolVLAConfig(PreTrainedConfig):
             )
 
     def validate_features(self) -> None:
+        if not self.use_proprio:
+            self.input_features.pop(OBS_STATE, None)
         for i in range(self.empty_cameras):
             key = f"{OBS_IMAGES}.empty_camera_{i}"
             empty_camera = PolicyFeature(

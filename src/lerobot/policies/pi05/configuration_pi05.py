@@ -38,6 +38,7 @@ class PI05Config(PreTrainedConfig):
 
     # Shorter state and action vectors will be padded to these dimensions
     max_state_dim: int = 32
+    use_proprio: bool = True
     max_action_dim: int = 32
 
     # Flow matching parameters: see openpi `PI0Pytorch`
@@ -131,7 +132,9 @@ class PI05Config(PreTrainedConfig):
             )
             self.input_features[key] = empty_camera
 
-        if OBS_STATE not in self.input_features:
+        if not self.use_proprio:
+            self.input_features.pop(OBS_STATE, None)
+        elif OBS_STATE not in self.input_features:
             state_feature = PolicyFeature(
                 type=FeatureType.STATE,
                 shape=(self.max_state_dim,),  # Padded to max_state_dim

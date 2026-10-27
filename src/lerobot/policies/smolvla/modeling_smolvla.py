@@ -223,7 +223,7 @@ class SmolVLAPolicy(PreTrainedPolicy):
         return actions
 
     def _prepare_batch(self, batch: dict[str, Tensor]) -> dict[str, Tensor]:
-        if self.config.adapt_to_pi_aloha:
+        if self.config.adapt_to_pi_aloha and self.config.use_proprio:
             batch[OBS_STATE] = self._pi_aloha_decode_state(batch[OBS_STATE])
 
         return batch
@@ -288,7 +288,8 @@ class SmolVLAPolicy(PreTrainedPolicy):
                 - "none": Return per-sample losses of shape (batch_size,) for RA-BC weighting
         """
         if self.config.adapt_to_pi_aloha:
-            batch[OBS_STATE] = self._pi_aloha_decode_state(batch[OBS_STATE])
+            if self.config.use_proprio:
+                batch[OBS_STATE] = self._pi_aloha_decode_state(batch[OBS_STATE])
             batch[ACTION] = self._pi_aloha_encode_actions_inv(batch[ACTION])
 
         images, img_masks = self.prepare_images(batch)
@@ -408,6 +409,8 @@ class SmolVLAPolicy(PreTrainedPolicy):
 
     def prepare_state(self, batch):
         """Pad state"""
+        if not self.config.use_proprio:
+            return None
         state = batch[OBS_STATE][:, -1, :] if batch[OBS_STATE].ndim > 2 else batch[OBS_STATE]
         state = pad_vector(state, self.config.max_state_dim)
         return state
@@ -542,7 +545,7 @@ class VLAFlowMatching(nn.Module):
 
     def set_requires_grad(self):
         for params in self.state_proj.parameters():
-            params.requires_grad = self.config.train_state_proj
+            params.requires_grad = self.config.train_state_proj and self.config.use_proprio
 
     def sample_noise(self, shape, device):
         return sample_noise(shape, device)
@@ -617,18 +620,16 @@ class VLAFlowMatching(nn.Module):
         num_lang_embs = lang_emb.shape[1]
         att_masks += [0] * num_lang_embs
 
-        state_emb = self.state_proj(state)
-        state_emb = state_emb[:, None, :] if state_emb.ndim == 2 else state_emb
-        embs.append(state_emb)
-        bsize = state_emb.shape[0]
-        device = state_emb.device
-
-        states_seq_len = state_emb.shape[1]
-        state_mask = torch.ones(bsize, states_seq_len, dtype=torch.bool, device=device)
-        pad_masks.append(state_mask)
-
-        # Set attention masks so that image and language inputs do not attend to state or actions
-        att_masks += [1] * (states_seq_len)
+        bsize = lang_emb.shape[0]
+        if self.config.use_proprio:
+            state_emb = self.state_proj(state)
+            state_emb = state_emb[:, None, :] if state_emb.ndim == 2 else state_emb
+            embs.append(state_emb)
+            states_seq_len = state_emb.shape[1]
+            state_mask = torch.ones(bsize, states_seq_len, dtype=torch.bool, device=state_emb.device)
+            pad_masks.append(state_mask)
+            # Image and language inputs do not attend to state or actions.
+            att_masks += [1] * states_seq_len
         embs = torch.cat(embs, dim=1)
         pad_masks = torch.cat(pad_masks, dim=1)
         att_masks = torch.tensor(att_masks, dtype=torch.bool, device=pad_masks.device)
@@ -735,8 +736,8 @@ class VLAFlowMatching(nn.Module):
         **kwargs: Unpack[ActionSelectKwargs],
     ) -> Tensor:
         """Do a full inference forward and compute the action (batch_size x num_steps x num_motors)"""
-        bsize = state.shape[0]
-        device = state.device
+        bsize = lang_tokens.shape[0]
+        device = lang_tokens.device
 
         if noise is None:
             actions_shape = (bsize, self.config.chunk_size, self.config.max_action_dim)

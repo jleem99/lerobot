@@ -31,7 +31,7 @@ class DiffusionConfig(PreTrainedConfig):
     Those are: `input_features` and `output_features`.
 
     Notes on the inputs and outputs:
-        - "observation.state" is required as an input key.
+        - "observation.state" is optional; omit it for vision-only conditioning.
         - Either:
             - At least one key starting with "observation.image is required as an input.
               AND/OR

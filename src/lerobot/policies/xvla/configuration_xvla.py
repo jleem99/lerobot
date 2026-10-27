@@ -120,6 +120,7 @@ class XVLAConfig(PreTrainedConfig):
     action_mode: str = "ee6d"
     num_denoising_steps: int = 10
     use_proprio: bool = True
+    pretrained_proprio_conversion: dict[str, Any] | None = None
     max_state_dim: int = 32
     max_action_dim: int = 20  # Maximum action dimension for padding (used by "auto" action mode)
     domain_feature_key: str | None = None
